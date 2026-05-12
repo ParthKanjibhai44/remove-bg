@@ -15,25 +15,41 @@ app = Flask(__name__)
 
 # ---------------------------------------------------------------
 # CORS — allow only your InfinityFree domain.
-# Replace the URL below with your actual InfinityFree domain.
 # ---------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    "https://remove-bg.gt.tc",
+    "http://remove-bg.gt.tc",
+    "http://localhost",
+    "http://127.0.0.1",
+]
+
 CORS(app, resources={
     r"/*": {
-        "origins": [
-            "https://remove-bg.gt.tc",   # <-- your InfinityFree domain
-            "http://remove-bg.gt.tc",    # keep both http and https
-            "http://localhost",          # for local testing
-            "http://127.0.0.1"           # for local testing
-        ],
+        "origins": ALLOWED_ORIGINS,
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
 })
 
+
+# ---------------------------------------------------------------
+# Safety net: manually attach CORS headers to EVERY response,
+# including Flask error handlers (400, 413, 500, 503).
+# Flask-CORS alone won't cover responses raised before routing.
+# ---------------------------------------------------------------
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get("Origin", "")
+    if origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
 # ---------------------------------------------------------------
 # Pre-download and load the model ONCE at startup.
-# u2netp is ~4MB (not 176MB) — safe for Render free 512MB RAM.
-# Setting the env variable stops rembg from ever trying u2net.
+# u2netp is ~4MB — safe for Render free 512MB RAM.
 # ---------------------------------------------------------------
 os.environ["U2NET_HOME"] = "/opt/render/.u2net"
 
@@ -63,7 +79,9 @@ def health_check():
 def remove_background():
     # Handle preflight OPTIONS request from browser
     if request.method == "OPTIONS":
-        return jsonify({"status": "ok"}), 200
+        response = jsonify({"status": "ok"})
+        response.status_code = 200
+        return response
 
     if session is None:
         logger.error("Model session is not initialized.")

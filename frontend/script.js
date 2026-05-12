@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const changeImageBtn = document.getElementById('changeImageBtn');
     const removeBgBtn = document.getElementById('removeBgBtn');
     const loadingState = document.getElementById('loadingState');
+    const loadingText = document.getElementById('loadingText');
     const resultSection = document.getElementById('resultSection');
     const resultImage = document.getElementById('resultImage');
     const downloadBtn = document.getElementById('downloadBtn');
@@ -18,16 +19,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedFile = null;
 
     // === CONFIGURATION ===
-    // IMPORTANT: Change this URL to your deployed Render/Railway backend URL
-    // before uploading these files to InfinityFree.
-    // Example: const API_URL = 'https://my-remove-bg-app.onrender.com/remove-bg';
+    const BASE_URL = 'https://remove-bg-nwl7.onrender.com';
+    const API_URL = `${BASE_URL}/remove-bg`;
 
-    const API_URL = 'http://192.168.1.8:5000/remove-bg';
-    // const API_URL = 'https://remove-bg-nwl7.onrender.com/remove-bg';
+    // ---------------------------------------------------------------
+    // Wake up the Render server as soon as the page loads.
+    // Render free tier spins down after ~15 min of inactivity.
+    // Pinging the health check endpoint early cuts cold-start delay.
+    // ---------------------------------------------------------------
+    function pingServer() {
+        fetch(`${BASE_URL}/`, { method: 'GET', mode: 'cors' })
+            .then(() => console.log('Server is awake.'))
+            .catch(() => console.log('Server ping failed (may still be waking up).'));
+    }
+    pingServer();
 
     // Event Listeners for Upload Box
     uploadBox.addEventListener('click', (e) => {
-        // Prevent click if we are clicking the change image button
         if (e.target !== changeImageBtn) {
             imageInput.click();
         }
@@ -45,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadBox.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadBox.classList.remove('dragover');
-
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             handleFile(e.dataTransfer.files[0]);
         }
@@ -64,14 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle File Selection
     function handleFile(file) {
-        // Validate file type
         const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
         if (!validTypes.includes(file.type)) {
             showError('Please select a valid image file (JPG, PNG, WEBP).');
             return;
         }
-
-        // Validate file size (e.g., max 5MB)
         if (file.size > 5 * 1024 * 1024) {
             showError('Image size should be less than 5MB.');
             return;
@@ -79,18 +83,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
         selectedFile = file;
 
-        // Show preview
         const reader = new FileReader();
         reader.onload = (e) => {
             imagePreview.src = e.target.result;
             uploadContent.classList.add('hidden');
             previewContainer.classList.remove('hidden');
-
-            // Enable submit button
             removeBgBtn.disabled = false;
             removeBgBtn.classList.remove('disabled');
         };
         reader.readAsDataURL(file);
+    }
+
+    // ---------------------------------------------------------------
+    // fetchWithRetry — retries on 502/503 (Render cold start).
+    // Waits 3 seconds between attempts and updates the loading text
+    // so the user knows what is happening.
+    // ---------------------------------------------------------------
+    async function fetchWithRetry(url, options, maxRetries = 3, delayMs = 3000) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                if (attempt > 1) {
+                    setLoadingText(`Server is waking up... (attempt ${attempt}/${maxRetries})`);
+                    await new Promise(res => setTimeout(res, delayMs));
+                }
+
+                const response = await fetch(url, options);
+
+                // 502/503 = server not ready yet, retry
+                if ((response.status === 502 || response.status === 503) && attempt < maxRetries) {
+                    console.warn(`Attempt ${attempt} got ${response.status}, retrying...`);
+                    continue;
+                }
+
+                return response; // success or final attempt
+            } catch (networkError) {
+                // Hard network failure (CORS from 502, ERR_FAILED, etc.)
+                if (attempt === maxRetries) throw networkError;
+                console.warn(`Attempt ${attempt} network error, retrying...`, networkError);
+            }
+        }
+    }
+
+    function setLoadingText(text) {
+        if (loadingText) loadingText.textContent = text;
     }
 
     // Handle API Request
@@ -104,33 +139,38 @@ document.addEventListener('DOMContentLoaded', () => {
         removeBgBtn.disabled = true;
         removeBgBtn.classList.add('disabled');
         resultSection.classList.add('hidden');
+        setLoadingText('Removing background...');
 
         const formData = new FormData();
         formData.append('image', selectedFile);
 
         try {
-            const response = await fetch(API_URL, {
+            const response = await fetchWithRetry(API_URL, {
                 method: 'POST',
                 body: formData,
-                // Don't set Content-Type header, let the browser set it automatically with the boundary for FormData
+                // Do NOT set Content-Type — browser sets it automatically with multipart boundary
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Failed to process image. Please try again.');
+                // Try to parse a JSON error body; fall back to a generic message
+                let errMsg = 'Failed to process image. Please try again.';
+                try {
+                    const errorData = await response.json();
+                    if (errorData.error) errMsg = errorData.error;
+                } catch (_) { /* response was not JSON */ }
+                throw new Error(errMsg);
             }
 
-            // The response is an image blob
             const blob = await response.blob();
             const imageUrl = URL.createObjectURL(blob);
 
-            // Show Result
             resultImage.src = imageUrl;
             downloadBtn.href = imageUrl;
 
-            // Original filename logic to append _nobg
+            // Append _nobg to the original filename
             const originalName = selectedFile.name;
-            const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+            const dotIndex = originalName.lastIndexOf('.');
+            const nameWithoutExt = dotIndex !== -1 ? originalName.substring(0, dotIndex) : originalName;
             downloadBtn.download = `${nameWithoutExt}_nobg.png`;
 
             // UI State: Result
@@ -139,16 +179,20 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadBox.style.pointerEvents = 'auto';
             resultSection.classList.remove('hidden');
 
-            // Scroll to result
             setTimeout(() => {
                 resultSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
 
         } catch (error) {
             console.error('Error:', error);
-            showError(error.message);
 
-            // Reset UI State on error
+            // Friendlier message for raw network/CORS failures
+            const msg = error.message && error.message !== 'Failed to fetch'
+                ? error.message
+                : 'Could not reach the server. It may still be waking up — please wait 30 seconds and try again.';
+            showError(msg);
+
+            // Reset UI
             loadingState.classList.add('hidden');
             previewContainer.classList.remove('hidden');
             uploadBox.style.pointerEvents = 'auto';
@@ -169,25 +213,19 @@ document.addEventListener('DOMContentLoaded', () => {
         removeBgBtn.disabled = true;
         removeBgBtn.classList.add('disabled');
 
-        // Scroll back to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    // Error Handling Toast
+    // Error Toast
     function showError(message) {
         errorMessage.textContent = message;
         errorToast.classList.remove('hidden');
-
-        // Trigger reflow for transition
-        void errorToast.offsetWidth;
-
+        void errorToast.offsetWidth; // trigger reflow for CSS transition
         errorToast.classList.add('show');
 
         setTimeout(() => {
             errorToast.classList.remove('show');
-            setTimeout(() => {
-                errorToast.classList.add('hidden');
-            }, 400); // Wait for transition to finish
-        }, 3000);
+            setTimeout(() => errorToast.classList.add('hidden'), 400);
+        }, 4000);
     }
 });

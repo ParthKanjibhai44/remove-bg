@@ -1,17 +1,22 @@
 :root {
     /* Color Palette */
-    --bg-color: #0f172a; /* Slate 900 */
-    --surface: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+    --bg-color: #0f172a;
+    /* Slate 900 */
+    --surface: rgba(30, 41, 59, 0.7);
+    /* Slate 800 with opacity */
     --surface-hover: rgba(51, 65, 85, 0.8);
     --border-color: rgba(255, 255, 255, 0.1);
-    
-    --primary: #8b5cf6; /* Violet 500 */
-    --primary-hover: #7c3aed; /* Violet 600 */
+
+    --primary: #8b5cf6;
+    /* Violet 500 */
+    --primary-hover: #7c3aed;
+    /* Violet 600 */
     --primary-gradient: linear-gradient(135deg, #8b5cf6, #3b82f6);
-    
-    --success: #10b981; /* Emerald 500 */
+
+    --success: #10b981;
+    /* Emerald 500 */
     --success-hover: #059669;
-    
+
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
     --error: #ef4444;
@@ -19,7 +24,7 @@
     /* Shadows & Effects */
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     --blur: blur(12px);
-    
+
     /* Animation */
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -90,8 +95,13 @@ body {
 }
 
 @keyframes float {
-    0% { transform: translate(0, 0) scale(1); }
-    100% { transform: translate(50px, 50px) scale(1.1); }
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    100% {
+        transform: translate(50px, 50px) scale(1.1);
+    }
 }
 
 /* Layout */
@@ -153,7 +163,8 @@ header p {
     justify-content: center;
 }
 
-.upload-box:hover, .upload-box.dragover {
+.upload-box:hover,
+.upload-box.dragover {
     border-color: var(--primary);
     background: var(--surface-hover);
     transform: translateY(-2px);
@@ -200,7 +211,7 @@ header p {
     max-width: 100%;
     max-height: 200px;
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     object-fit: contain;
 }
 
@@ -232,7 +243,9 @@ header p {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Buttons */
@@ -323,7 +336,7 @@ header p {
 .checkerboard-bg {
     background-color: #e5e5f7;
     opacity: 0.8;
-    background-image:  repeating-linear-gradient(45deg, #c0c0c0 25%, transparent 25%, transparent 75%, #c0c0c0 75%, #c0c0c0), repeating-linear-gradient(45deg, #c0c0c0 25%, #e5e5f7 25%, #e5e5f7 75%, #c0c0c0 75%, #c0c0c0);
+    background-image: repeating-linear-gradient(45deg, #c0c0c0 25%, transparent 25%, transparent 75%, #c0c0c0 75%, #c0c0c0), repeating-linear-gradient(45deg, #c0c0c0 25%, #e5e5f7 25%, #e5e5f7 75%, #c0c0c0 75%, #c0c0c0);
     background-position: 0 0, 10px 10px;
     background-size: 20px 20px;
     border-radius: 12px;
@@ -340,7 +353,7 @@ header p {
     max-width: 100%;
     max-height: 400px;
     object-fit: contain;
-    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
     animation: zoomIn 0.5s ease-out;
 }
 
@@ -378,23 +391,49 @@ header p {
 
 /* Keyframes */
 @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes zoomIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 /* Responsive */
@@ -402,16 +441,29 @@ header p {
     .container {
         padding: 1rem;
     }
+
     h1 {
         font-size: 2.5rem;
     }
+
     .upload-box {
         padding: 2rem 1rem;
     }
+
     .action-buttons {
         flex-direction: column;
     }
+
     .action-buttons .btn {
         width: 100%;
     }
+}
+
+/* Loading hint line below the status text */
+.loading-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: normal;
+    display: block;
+    margin-top: -0.5rem;
 }
