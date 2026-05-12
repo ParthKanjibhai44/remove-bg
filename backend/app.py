@@ -1,12 +1,17 @@
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
-from rembg import remove
+from rembg import remove, new_session
 from PIL import Image
 import io
 
 app = Flask(__name__)
 # Enable CORS for all domains so the InfinityFree frontend can access the API.
 CORS(app)
+
+# Initialize the 'u2netp' model globally so it downloads and loads into memory 
+# when the server starts, rather than during the first request.
+# 'u2netp' is a smaller model (~4MB) that prevents Out-Of-Memory errors on Render's free tier.
+session = new_session("u2netp")
 
 @app.route('/', methods=['GET'])
 def health_check():
@@ -26,8 +31,8 @@ def remove_background():
         # Read the image file
         input_image = file.read()
         
-        # Process the image with rembg
-        output_image = remove(input_image)
+        # Process the image with rembg using the lightweight session
+        output_image = remove(input_image, session=session)
         
         # Return the processed image as a response
         return send_file(
