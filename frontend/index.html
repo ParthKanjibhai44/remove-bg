@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Background Remover | Magic Cutout</title>
+    <meta name="description" content="Remove backgrounds from your images instantly using AI. Fast, free, and incredibly accurate.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-elements">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <h1>AI Background <span class="text-gradient">Remover</span></h1>
+            <p>Upload an image and let our AI do the magic instantly.</p>
+        </header>
+
+        <section class="upload-section">
+            <div class="upload-box" id="uploadBox">
+                <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp" hidden>
+                <div class="upload-content" id="uploadContent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    <h3>Click or Drag image here</h3>
+                    <p class="formats">Supports JPG, PNG, WEBP</p>
+                </div>
+                
+                <!-- Image Preview State -->
+                <div class="preview-container hidden" id="previewContainer">
+                    <img id="imagePreview" src="" alt="Preview">
+                    <button class="btn btn-secondary btn-small" id="changeImageBtn">Change Image</button>
+                </div>
+
+                <!-- Loading State -->
+                <div class="loading-state hidden" id="loadingState">
+                    <div class="spinner"></div>
+                    <p>Removing background...<br><span>This usually takes a few seconds</span></p>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-large disabled" id="removeBgBtn" disabled>
+                Remove Background
+            </button>
+        </section>
+
+        <!-- Result Section -->
+        <section class="result-section hidden" id="resultSection">
+            <h2>Result</h2>
+            <div class="result-box">
+                <div class="checkerboard-bg">
+                    <img id="resultImage" src="" alt="Background removed result">
+                </div>
+                <div class="action-buttons">
+                    <a id="downloadBtn" href="#" download="bg-removed.png" class="btn btn-success">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Download Image
+                    </a>
+                    <button id="startOverBtn" class="btn btn-secondary">Start Over</button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Error Toast -->
+        <div class="toast error-toast hidden" id="errorToast">
+            <span id="errorMessage">An error occurred.</span>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
