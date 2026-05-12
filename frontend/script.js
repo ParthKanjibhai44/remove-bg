@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // IMPORTANT: Change this URL to your deployed Render/Railway backend URL
     // before uploading these files to InfinityFree.
     // Example: const API_URL = 'https://my-remove-bg-app.onrender.com/remove-bg';
-    const API_URL = 'http://localhost:5000/remove-bg'; 
+    const API_URL = 'https://remove-bg-nwl7.onrender.com/remove-bg';
 
     // Event Listeners for Upload Box
     uploadBox.addEventListener('click', (e) => {
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadBox.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadBox.classList.remove('dragover');
-        
+
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             handleFile(e.dataTransfer.files[0]);
         }
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             imagePreview.src = e.target.result;
             uploadContent.classList.add('hidden');
             previewContainer.classList.remove('hidden');
-            
+
             // Enable submit button
             removeBgBtn.disabled = false;
             removeBgBtn.classList.remove('disabled');
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show Result
             resultImage.src = imageUrl;
             downloadBtn.href = imageUrl;
-            
+
             // Original filename logic to append _nobg
             const originalName = selectedFile.name;
             const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
@@ -136,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
             previewContainer.classList.remove('hidden');
             uploadBox.style.pointerEvents = 'auto';
             resultSection.classList.remove('hidden');
-            
+
             // Scroll to result
             setTimeout(() => {
                 resultSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error:', error);
             showError(error.message);
-            
+
             // Reset UI State on error
             loadingState.classList.add('hidden');
             previewContainer.classList.remove('hidden');
@@ -159,14 +159,14 @@ document.addEventListener('DOMContentLoaded', () => {
     startOverBtn.addEventListener('click', () => {
         selectedFile = null;
         imageInput.value = '';
-        
+
         previewContainer.classList.add('hidden');
         resultSection.classList.add('hidden');
         uploadContent.classList.remove('hidden');
-        
+
         removeBgBtn.disabled = true;
         removeBgBtn.classList.add('disabled');
-        
+
         // Scroll back to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
@@ -175,10 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         errorMessage.textContent = message;
         errorToast.classList.remove('hidden');
-        
+
         // Trigger reflow for transition
         void errorToast.offsetWidth;
-        
+
         errorToast.classList.add('show');
 
         setTimeout(() => {
