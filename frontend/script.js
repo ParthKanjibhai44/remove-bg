@@ -21,7 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // IMPORTANT: Change this URL to your deployed Render/Railway backend URL
     // before uploading these files to InfinityFree.
     // Example: const API_URL = 'https://my-remove-bg-app.onrender.com/remove-bg';
-    const API_URL = 'https://remove-bg-nwl7.onrender.com/remove-bg';
+
+    const API_URL = 'http://192.168.1.8:5000/remove-bg';
+    // const API_URL = 'https://remove-bg-nwl7.onrender.com/remove-bg';
 
     // Event Listeners for Upload Box
     uploadBox.addEventListener('click', (e) => {

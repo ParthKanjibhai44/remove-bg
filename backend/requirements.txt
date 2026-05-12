@@ -1,6 +1,5 @@
-Flask==3.0.3
-Flask-Cors==4.0.1
-rembg==2.0.75
-gunicorn==22.0.0
-onnxruntime
-numpy
+flask
+flask-cors
+rembg[cpu]
+pillow
+gunicorn
