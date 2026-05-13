@@ -3,20 +3,16 @@ import io
 import gc
 import logging
 
+import numpy as np
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
-from rembg import remove, new_session
 from PIL import Image
 
-# Configure logging so all messages appear in Render logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# ---------------------------------------------------------------
-# CORS
-# ---------------------------------------------------------------
 ALLOWED_ORIGINS = [
     "https://remove-bg.gt.tc",
     "http://remove-bg.gt.tc",
@@ -43,39 +39,46 @@ def add_cors_headers(response):
 
 
 # ---------------------------------------------------------------
-# Model config
-# u2netp = ~4MB model, lightest available in rembg.
-# MAX_SIDE caps the image resolution before inference to
-# keep peak RAM well under Render's 512MB limit.
+# Load the rembg session ONCE at startup using u2netp (4MB model).
+# We lazy-import rembg here so the module-level import doesn't
+# consume memory before the session is ready.
 # ---------------------------------------------------------------
 os.environ["U2NET_HOME"] = "/opt/render/.u2net"
-MAX_SIDE = 1024   # pixels — resize any image larger than this before processing
-FILE_SIZE_LIMIT = 5 * 1024 * 1024  # 5 MB
 
-logger.info("Loading u2netp model at startup...")
+# Maximum image dimension — anything larger is downscaled before
+# inference so peak RAM stays well below Render's 512 MB limit.
+MAX_SIDE     = 800          # px  (was 1024 — reduced further)
+FILE_LIMIT   = 4 * 1024 * 1024   # 4 MB hard reject
+
+logger.info("Loading u2netp model …")
 try:
-    session = new_session("u2netp")
-    logger.info("u2netp model loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load model: {e}")
-    session = None
+    from rembg import remove, new_session
+    SESSION = new_session("u2netp")
+    logger.info("u2netp model loaded OK.")
+except Exception as exc:
+    logger.error(f"Model load failed: {exc}")
+    SESSION = None
+    remove  = None
 
 
 # ---------------------------------------------------------------
-# Helper: resize image so its longest side <= MAX_SIDE,
-# then return as PNG bytes. This is the key memory-saving step.
+# Helpers
 # ---------------------------------------------------------------
-def preprocess_image(input_bytes: bytes) -> bytes:
-    img = Image.open(io.BytesIO(input_bytes)).convert("RGBA")
+
+def resize_if_needed(img: Image.Image) -> Image.Image:
+    """Downscale so the longest side ≤ MAX_SIDE."""
     w, h = img.size
-    if max(w, h) > MAX_SIDE:
-        ratio = MAX_SIDE / max(w, h)
-        new_w, new_h = int(w * ratio), int(h * ratio)
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-        logger.info(f"Resized image from {w}x{h} to {new_w}x{new_h} to save memory.")
+    if max(w, h) <= MAX_SIDE:
+        return img
+    ratio = MAX_SIDE / max(w, h)
+    new_size = (int(w * ratio), int(h * ratio))
+    logger.info(f"Resizing {w}x{h} → {new_size[0]}x{new_size[1]}")
+    return img.resize(new_size, Image.LANCZOS)
+
+
+def image_to_png_bytes(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
-    img.close()
     return buf.getvalue()
 
 
@@ -88,7 +91,7 @@ def health_check():
     return jsonify({
         "status": "running",
         "model": "u2netp",
-        "model_loaded": session is not None,
+        "model_loaded": SESSION is not None,
         "max_side_px": MAX_SIDE
     })
 
@@ -96,52 +99,55 @@ def health_check():
 @app.route("/remove-bg", methods=["POST", "OPTIONS"])
 def remove_background():
     if request.method == "OPTIONS":
-        response = jsonify({"status": "ok"})
-        response.status_code = 200
-        return response
+        return jsonify({"status": "ok"}), 200
 
-    if session is None:
-        logger.error("Model session is not initialized.")
+    if SESSION is None:
         return jsonify({"error": "Model not loaded. Please try again later."}), 503
 
     if "image" not in request.files:
-        return jsonify({"error": "No image found in request. Use key name 'image'."}), 400
+        return jsonify({"error": "No image file in request (use key 'image')."}), 400
 
     file = request.files["image"]
-
     if file.filename == "":
         return jsonify({"error": "No file selected."}), 400
 
     allowed_types = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
     if file.content_type not in allowed_types:
-        return jsonify({"error": f"Unsupported file type: {file.content_type}"}), 400
+        return jsonify({"error": f"Unsupported type: {file.content_type}"}), 400
 
     try:
-        logger.info(f"Processing image: {file.filename}")
+        raw = file.read()
+        if len(raw) > FILE_LIMIT:
+            return jsonify({"error": "File too large. Max 4 MB."}), 413
 
-        input_bytes = file.read()
+        logger.info(f"Processing '{file.filename}' ({len(raw)//1024} KB)")
 
-        if len(input_bytes) > FILE_SIZE_LIMIT:
-            return jsonify({"error": "File too large. Maximum size is 5MB."}), 413
-
-        # Key step: shrink large images before inference to stay within 512MB RAM
-        processed_bytes = preprocess_image(input_bytes)
-        del input_bytes   # free original bytes immediately
+        # ── 1. Open & downscale ──────────────────────────────────
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
+        del raw
         gc.collect()
 
-        # Remove background
-        output_bytes = remove(processed_bytes, session=session)
-        del processed_bytes
+        img = resize_if_needed(img)
+
+        # ── 2. Convert to PNG bytes for rembg ───────────────────
+        png_bytes = image_to_png_bytes(img)
+        img.close()
+        del img
+        gc.collect()
+
+        # ── 3. Background removal ────────────────────────────────
+        result_bytes = remove(png_bytes, session=SESSION)
+        del png_bytes
         gc.collect()
 
         logger.info("Background removed successfully.")
 
-        result = io.BytesIO(output_bytes)
-        del output_bytes
+        buf = io.BytesIO(result_bytes)
+        del result_bytes
         gc.collect()
 
         return send_file(
-            result,
+            buf,
             mimetype="image/png",
             as_attachment=True,
             download_name="bg-removed.png"
@@ -149,12 +155,12 @@ def remove_background():
 
     except MemoryError:
         gc.collect()
-        logger.error("OOM during image processing.")
-        return jsonify({"error": "Image too complex to process. Try a smaller image."}), 507
+        logger.error("OOM during processing.")
+        return jsonify({"error": "Image too large to process. Please use a smaller image."}), 507
 
-    except Exception as e:
+    except Exception as exc:
         gc.collect()
-        logger.error(f"Error processing image: {e}")
+        logger.error(f"Processing error: {exc}")
         return jsonify({"error": "Failed to process image. Please try again."}), 500
 
 

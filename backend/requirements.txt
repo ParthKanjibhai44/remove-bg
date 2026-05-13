@@ -2,4 +2,5 @@ flask
 flask-cors
 rembg[cpu]
 pillow
+numpy
 gunicorn
