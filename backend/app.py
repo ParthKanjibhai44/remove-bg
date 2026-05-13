@@ -1,5 +1,4 @@
 import os, io, gc, logging
-import numpy as np
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 from PIL import Image
@@ -10,15 +9,16 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # ── CORS ───────────────────────────────────────────────────────
-# Works for both local development and live InfinityFree domain.
 ALLOWED_ORIGINS = [
+    # Live frontend (InfinityFree)
     "https://remove-bg.gt.tc",
     "http://remove-bg.gt.tc",
+    # Local development
     "http://localhost",
     "http://localhost:3000",
-    "http://localhost:5500",   # VS Code Live Server default
+    "http://localhost:5500",   # VS Code Live Server
     "http://127.0.0.1",
-    "http://127.0.0.1:5500",  # VS Code Live Server default
+    "http://127.0.0.1:5500",
     "http://127.0.0.1:3000",
     "null",                    # file:// opened directly in browser
 ]
@@ -32,23 +32,20 @@ CORS(app, resources={r"/*": {
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin", "")
-    # On local, origin may be "null" (file://) or a localhost port
     if origin in ALLOWED_ORIGINS or not origin:
         response.headers["Access-Control-Allow-Origin"] = origin or "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
-# ── Model path — works on both local and Render ────────────────
-# On Render:  U2NET_HOME is set to /opt/render/.u2net via env var
-#             (set in Render Dashboard → Environment)
-# On local:   falls back to ~/.u2net (rembg's own default)
+# ── Model setup ────────────────────────────────────────────────
+# U2NET_HOME:
+#   Railway / local → defaults to ~/.u2net (rembg default)
+#   Override by setting U2NET_HOME env var in Railway dashboard
 U2NET_HOME = os.environ.get("U2NET_HOME", os.path.expanduser("~/.u2net"))
 os.environ["U2NET_HOME"] = U2NET_HOME
 logger.info(f"U2NET_HOME = {U2NET_HOME}")
 
-# On Render free tier (512 MB RAM): keep at 512 px
-# On local you can raise this — set MAX_SIDE env var to override
 MAX_SIDE   = int(os.environ.get("MAX_SIDE", "512"))
 FILE_LIMIT = 4 * 1024 * 1024  # 4 MB
 
@@ -84,7 +81,7 @@ def to_png_bytes(img: Image.Image) -> bytes:
 @app.route("/", methods=["GET"])
 def health_check():
     return jsonify({
-        "status": "running",
+        "status":       "running",
         "model_loaded": SESSION is not None,
         "max_side_px":  MAX_SIDE,
         "u2net_home":   U2NET_HOME,
@@ -119,7 +116,7 @@ def remove_background():
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         del raw; gc.collect()
 
-        img      = resize_if_needed(img)
+        img       = resize_if_needed(img)
         png_bytes = to_png_bytes(img)
         img.close(); del img; gc.collect()
 
@@ -144,8 +141,6 @@ def remove_background():
         return jsonify({"error": "Processing failed. Please try again."}), 500
 
 if __name__ == "__main__":
-    # Local dev: python app.py
-    # Render:    gunicorn (never reaches here)
     port = int(os.environ.get("PORT", 5000))
     logger.info(f"Starting local dev server on port {port}")
     app.run(host="0.0.0.0", port=port, debug=True)

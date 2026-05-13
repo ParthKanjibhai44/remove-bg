@@ -18,9 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedFile = null;
 
     // ── Auto-detect local vs live ──────────────────────────────
-    // When running locally (localhost / 127.0.0.1 / file://)
-    // the script points at your local Flask server (port 5000).
-    // On the live InfinityFree site it points at Render.
+    // On localhost / file:// → local Flask on port 5000
+    // On InfinityFree live site → Railway backend
     const isLocal = (
         window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
@@ -28,17 +27,22 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     const BASE_URL = isLocal
-        ? 'http://127.0.0.1:5000'                       // local Flask
-        : 'https://remove-bg-nwl7.onrender.com';        // Render (live)
+        ? 'http://127.0.0.1:5000'                               // local Flask
+        : 'https://remove-bg-production-d122.up.railway.app';   // Railway live
 
     const API_URL = `${BASE_URL}/remove-bg`;
 
     console.log(`[config] isLocal=${isLocal}  API=${API_URL}`);
 
-    // ── Wake server (only needed on Render, harmless locally) ──
+    // ── Wake server on page load ───────────────────────────────
+    // Railway keeps the server alive (no cold start like Render free),
+    // but we still ping to confirm it's reachable.
     fetch(`${BASE_URL}/`, { method: 'GET', mode: 'cors' })
-        .then(r => r.ok && console.log('Server is awake.'))
-        .catch(() => console.log('Server ping failed (may be waking up).'));
+        .then(r => {
+            if (r.ok) console.log('Server is awake and ready.');
+            else console.warn(`Server ping returned ${r.status}`);
+        })
+        .catch(() => console.warn('Server ping failed.'));
 
     // ── Upload box ─────────────────────────────────────────────
     uploadBox.addEventListener('click', (e) => {
@@ -88,20 +92,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Fetch with retry ───────────────────────────────────────
-    // Locally: 1 attempt only (no cold-start issue).
-    // On Render: up to 4 attempts with 5 s delay between each.
+    // Railway doesn't sleep like Render free tier, so fewer retries needed.
+    // Still retry on transient 502/503 errors.
     async function fetchWithRetry(url, options) {
-        const maxRetries = isLocal ? 1 : 4;
-        const delayMs = 5000;
+        const maxRetries = isLocal ? 1 : 3;
+        const delayMs = 3000;
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             if (attempt > 1) {
-                setLoadingText(`Server is waking up… (attempt ${attempt}/${maxRetries})`);
+                setLoadingText(`Retrying… (attempt ${attempt}/${maxRetries})`);
                 await new Promise(r => setTimeout(r, delayMs));
             }
             try {
                 const response = await fetch(url, options);
-                // 502/503 = Render cold-start crash, retry
                 if ((response.status === 502 || response.status === 503) && attempt < maxRetries) {
                     console.warn(`Attempt ${attempt}: got ${response.status}, retrying…`);
                     continue;
@@ -137,12 +140,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetchWithRetry(API_URL, {
                 method: 'POST',
                 body: formData
-                // Do NOT set Content-Type — browser adds multipart boundary
+                // Do NOT set Content-Type — browser sets multipart boundary automatically
             });
 
             if (!response.ok) {
                 let msg = 'Failed to process image. Please try again.';
-                try { const d = await response.json(); if (d.error) msg = d.error; } catch (_) { }
+                try {
+                    const d = await response.json();
+                    if (d.error) msg = d.error;
+                } catch (_) { }
                 throw new Error(msg);
             }
 
@@ -166,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error:', err);
             const msg = (err.message && err.message !== 'Failed to fetch')
                 ? err.message
-                : 'Server is still waking up. Please wait 30 seconds and try again.';
+                : 'Could not reach the server. Please check your connection and try again.';
             showError(msg);
 
             loadingState.classList.add('hidden');
