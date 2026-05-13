@@ -9,11 +9,18 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# ── CORS ───────────────────────────────────────────────────────
+# Works for both local development and live InfinityFree domain.
 ALLOWED_ORIGINS = [
     "https://remove-bg.gt.tc",
     "http://remove-bg.gt.tc",
     "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5500",   # VS Code Live Server default
     "http://127.0.0.1",
+    "http://127.0.0.1:5500",  # VS Code Live Server default
+    "http://127.0.0.1:3000",
+    "null",                    # file:// opened directly in browser
 ]
 
 CORS(app, resources={r"/*": {
@@ -25,20 +32,27 @@ CORS(app, resources={r"/*": {
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get("Origin", "")
-    if origin in ALLOWED_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = origin
+    # On local, origin may be "null" (file://) or a localhost port
+    if origin in ALLOWED_ORIGINS or not origin:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
-# ── Model setup ────────────────────────────────────────────────
-os.environ["U2NET_HOME"] = "/opt/render/.u2net"
+# ── Model path — works on both local and Render ────────────────
+# On Render:  U2NET_HOME is set to /opt/render/.u2net via env var
+#             (set in Render Dashboard → Environment)
+# On local:   falls back to ~/.u2net (rembg's own default)
+U2NET_HOME = os.environ.get("U2NET_HOME", os.path.expanduser("~/.u2net"))
+os.environ["U2NET_HOME"] = U2NET_HOME
+logger.info(f"U2NET_HOME = {U2NET_HOME}")
 
-# 512 px keeps peak inference RAM ≈ 80–100 MB on free tier
-MAX_SIDE   = 512
+# On Render free tier (512 MB RAM): keep at 512 px
+# On local you can raise this — set MAX_SIDE env var to override
+MAX_SIDE   = int(os.environ.get("MAX_SIDE", "512"))
 FILE_LIMIT = 4 * 1024 * 1024  # 4 MB
 
-logger.info("Loading u2netp model …")
+logger.info(f"Loading u2netp model (MAX_SIDE={MAX_SIDE}) …")
 try:
     from rembg import remove, new_session
     SESSION = new_session("u2netp")
@@ -53,7 +67,7 @@ def resize_if_needed(img: Image.Image) -> Image.Image:
     w, h = img.size
     if max(w, h) <= MAX_SIDE:
         return img
-    ratio = MAX_SIDE / max(w, h)
+    ratio    = MAX_SIDE / max(w, h)
     new_size = (int(w * ratio), int(h * ratio))
     logger.info(f"Resizing {w}x{h} → {new_size[0]}x{new_size[1]}")
     resized = img.resize(new_size, Image.LANCZOS)
@@ -72,7 +86,8 @@ def health_check():
     return jsonify({
         "status": "running",
         "model_loaded": SESSION is not None,
-        "max_side_px": MAX_SIDE
+        "max_side_px":  MAX_SIDE,
+        "u2net_home":   U2NET_HOME,
     })
 
 @app.route("/remove-bg", methods=["POST", "OPTIONS"])
@@ -101,18 +116,13 @@ def remove_background():
 
         logger.info(f"Processing '{file.filename}' ({len(raw)//1024} KB)")
 
-        # 1. Open as RGB (saves RAM vs RGBA at this stage)
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         del raw; gc.collect()
 
-        # 2. Resize to MAX_SIDE — single biggest RAM saver
-        img = resize_if_needed(img)
-
-        # 3. Convert to PNG bytes for rembg
+        img      = resize_if_needed(img)
         png_bytes = to_png_bytes(img)
         img.close(); del img; gc.collect()
 
-        # 4. Remove background
         result_bytes = remove(png_bytes, session=SESSION)
         del png_bytes; gc.collect()
 
@@ -134,4 +144,8 @@ def remove_background():
         return jsonify({"error": "Processing failed. Please try again."}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    # Local dev: python app.py
+    # Render:    gunicorn (never reaches here)
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"Starting local dev server on port {port}")
+    app.run(host="0.0.0.0", port=port, debug=True)

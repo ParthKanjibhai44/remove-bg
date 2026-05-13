@@ -17,17 +17,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let selectedFile = null;
 
-    const BASE_URL = 'https://remove-bg-nwl7.onrender.com';
+    // ── Auto-detect local vs live ──────────────────────────────
+    // When running locally (localhost / 127.0.0.1 / file://)
+    // the script points at your local Flask server (port 5000).
+    // On the live InfinityFree site it points at Render.
+    const isLocal = (
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.protocol === 'file:'
+    );
+
+    const BASE_URL = isLocal
+        ? 'http://127.0.0.1:5000'                       // local Flask
+        : 'https://remove-bg-nwl7.onrender.com';        // Render (live)
+
     const API_URL = `${BASE_URL}/remove-bg`;
 
-    // ── Wake server on page load ───────────────────────────────
-    // Render free tier sleeps after 15 min inactivity.
-    // Pinging / early gives it a head-start before user clicks.
+    console.log(`[config] isLocal=${isLocal}  API=${API_URL}`);
+
+    // ── Wake server (only needed on Render, harmless locally) ──
     fetch(`${BASE_URL}/`, { method: 'GET', mode: 'cors' })
-        .then(r => { if (r.ok) console.log('Server is awake.'); })
+        .then(r => r.ok && console.log('Server is awake.'))
         .catch(() => console.log('Server ping failed (may be waking up).'));
 
-    // ── Upload box events ──────────────────────────────────────
+    // ── Upload box ─────────────────────────────────────────────
     uploadBox.addEventListener('click', (e) => {
         if (e.target !== changeImageBtn) imageInput.click();
     });
@@ -75,10 +88,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Fetch with retry ───────────────────────────────────────
-    // Retries up to 4 times on 502/503 (Render cold-start crash).
-    // Waits 5 s between attempts and updates UI text so the user
-    // knows what is happening instead of seeing a blank spinner.
-    async function fetchWithRetry(url, options, maxRetries = 4, delayMs = 5000) {
+    // Locally: 1 attempt only (no cold-start issue).
+    // On Render: up to 4 attempts with 5 s delay between each.
+    async function fetchWithRetry(url, options) {
+        const maxRetries = isLocal ? 1 : 4;
+        const delayMs = 5000;
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             if (attempt > 1) {
                 setLoadingText(`Server is waking up… (attempt ${attempt}/${maxRetries})`);
@@ -86,6 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 const response = await fetch(url, options);
+                // 502/503 = Render cold-start crash, retry
                 if ((response.status === 502 || response.status === 503) && attempt < maxRetries) {
                     console.warn(`Attempt ${attempt}: got ${response.status}, retrying…`);
                     continue;
@@ -106,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
     removeBgBtn.addEventListener('click', async () => {
         if (!selectedFile) return;
 
-        // Enter loading state
         previewContainer.classList.add('hidden');
         loadingState.classList.remove('hidden');
         uploadBox.style.pointerEvents = 'none';
@@ -122,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetchWithRetry(API_URL, {
                 method: 'POST',
                 body: formData
-                // Do NOT set Content-Type — browser adds multipart boundary automatically
+                // Do NOT set Content-Type — browser adds multipart boundary
             });
 
             if (!response.ok) {
@@ -141,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const base = dot !== -1 ? selectedFile.name.substring(0, dot) : selectedFile.name;
             downloadBtn.download = `${base}_nobg.png`;
 
-            // Show result
             loadingState.classList.add('hidden');
             previewContainer.classList.remove('hidden');
             uploadBox.style.pointerEvents = 'auto';
